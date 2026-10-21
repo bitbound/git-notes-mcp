@@ -66,11 +66,29 @@ internal sealed class TempVault : IDisposable
     return (process.ExitCode, output, error);
   }
 
+  /// <summary>
+  /// Git writes loose objects read-only, which a recursive delete rejects on Windows.
+  /// </summary>
+  public static void DeleteTree(string path)
+  {
+    if (!Directory.Exists(path))
+    {
+      return;
+    }
+
+    foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+    {
+      File.SetAttributes(file, FileAttributes.Normal);
+    }
+
+    Directory.Delete(path, recursive: true);
+  }
+
   public void Dispose()
   {
     try
     {
-      Directory.Delete(_basePath, recursive: true);
+      DeleteTree(_basePath);
     }
     catch (IOException)
     {

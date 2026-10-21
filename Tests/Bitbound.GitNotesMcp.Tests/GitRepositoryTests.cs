@@ -182,7 +182,7 @@ public sealed class GitRepositoryTests
     }
     finally
     {
-      Directory.Delete(clone, recursive: true);
+      TempVault.DeleteTree(clone);
     }
   }
 }
