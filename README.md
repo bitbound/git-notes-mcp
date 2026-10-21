@@ -22,9 +22,7 @@ The server reads these environment variables at startup.
 | `GIT_NOTES_ALLOW_REMOTE_MISMATCH` | no | `false` | Replace an existing remote that points elsewhere. |
 | `GIT_NOTES_GIT_TIMEOUT_SECONDS` | no | `60` | Timeout for local git commands. Network commands use twice this value. |
 | `GIT_NOTES_MAX_FILE_BYTES` | no | `1048576` | Maximum note size for reads and searches. |
-| `GIT_NOTES_ZVEC_URL` | no | | zvec-grep MCP endpoint. Leave unset for keyword-only search. |
-| `GIT_NOTES_ZVEC_TOKEN` | no | | Bearer token for zvec-grep. |
-| `GIT_NOTES_ZVEC_TIMEOUT_SECONDS` | no | `10` | Timeout for a zvec-grep search. |
+| `GIT_NOTES_ZVEC_ENABLED` | no | `false` | Use `zg` for natural-language search. Requires zvec-grep on PATH. |
 | `GIT_NOTES_LOG_LEVEL` | no | `Warning` | Minimum log level. Logs go to stderr. |
 
 Startup creates the directory and repository when needed, writes `.gitignore` and `.gitattributes`, configures the remote, and makes an initial commit. It never fetches at startup.
@@ -54,7 +52,11 @@ Write tools are not registered when `GIT_NOTES_READ_ONLY=true`.
 
 ## Semantic search
 
-Set `GIT_NOTES_ZVEC_URL` to a running zvec-grep MCP endpoint, for example `http://127.0.0.1:7999/mcp`, to send natural-language queries to zvec-grep. Regex and case-sensitive searches always use the built-in keyword search. If zvec-grep fails, the call falls back to keyword search and reports the reason in `fallbackReason`.
+Set `GIT_NOTES_ZVEC_ENABLED=true` to search with [zvec-grep](https://github.com/zvec-ai/zvec-grep). The server finds `zg` on PATH, starts it as a stdio MCP child with `zg server --stdio` on the first natural-language search, and stops it when the server exits. Nothing leaves the machine, and no endpoint or token is involved.
+
+The server builds the index itself. Before the first natural-language search it runs `zg index <vault>` once per process, so a fresh vault needs no setup. Indexing uses the default local embedding model, which zvec-grep downloads to `~/.zvec-grep/models` on first use, and zvec-grep refreshes an existing index in the background as you search.
+
+Regex and case-sensitive searches always use the built-in keyword search. If `zg` is missing, indexing fails, or the search fails, the call falls back to keyword search and reports the reason in `fallbackReason`.
 
 ## Build and test
 

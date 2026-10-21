@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using Bitbound.GitNotesMcp.Configuration;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -6,16 +8,22 @@ using ModelContextProtocol.Protocol;
 
 namespace Bitbound.GitNotesMcp.Notes;
 
+/// <summary>
+/// Runs zvec-grep as a local stdio MCP server. No endpoint or credential is involved.
+/// </summary>
 public sealed class ZvecSearchBackend(
   NotesOptions options,
   NotePathResolver resolver,
   ILogger<ZvecSearchBackend> logger) : IAsyncDisposable
 {
+  private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(30);
+  private static readonly TimeSpan IndexTimeout = TimeSpan.FromMinutes(5);
   private readonly SemaphoreSlim _gate = new(1, 1);
 
   private McpClient? _client;
+  private bool _indexAttempted;
 
-  public bool IsEnabled => options.ZvecUrl is not null;
+  public bool IsEnabled => options.ZvecEnabled;
 
   public async ValueTask DisposeAsync()
   {
@@ -42,12 +50,9 @@ public sealed class ZvecSearchBackend(
       arguments["globs"] = new[] { glob };
     }
 
-    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-    timeout.CancelAfter(TimeSpan.FromSeconds(options.ZvecTimeoutSeconds));
-
     try
     {
-      var result = await client.CallToolAsync("zvec_grep_search", arguments, cancellationToken: timeout.Token);
+      var result = await client.CallToolAsync("zvec_grep_search", arguments, cancellationToken: cancellationToken);
       var text = string.Join("\n", result.Content.OfType<TextContentBlock>().Select(block => block.Text));
 
       if (result.IsError == true)
@@ -57,10 +62,88 @@ public sealed class ZvecSearchBackend(
 
       return text;
     }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+      throw;
+    }
     catch
     {
       await InvalidateAsync();
       throw;
+    }
+  }
+
+  private static void TryKill(Process process)
+  {
+    try
+    {
+      if (!process.HasExited)
+      {
+        process.Kill(entireProcessTree: true);
+      }
+    }
+    catch (InvalidOperationException)
+    {
+    }
+  }
+
+  private async Task EnsureIndexedAsync(CancellationToken cancellationToken)
+  {
+    if (_indexAttempted)
+    {
+      return;
+    }
+
+    _indexAttempted = true;
+
+    var startInfo = new ProcessStartInfo(options.ZvecCommand)
+    {
+      WorkingDirectory = resolver.Root,
+      RedirectStandardOutput = true,
+      RedirectStandardError = true,
+      UseShellExecute = false,
+      StandardOutputEncoding = Encoding.UTF8,
+      StandardErrorEncoding = Encoding.UTF8
+    };
+
+    startInfo.ArgumentList.Add("index");
+    startInfo.ArgumentList.Add(resolver.Root);
+
+    using var process = new Process { StartInfo = startInfo };
+    try
+    {
+      process.Start();
+    }
+    catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+    {
+      throw new McpException($"'{options.ZvecCommand}' was not found on PATH. Install zvec-grep or set GIT_NOTES_ZVEC_ENABLED=false.");
+    }
+
+    var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
+    var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
+
+    using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    timeoutSource.CancelAfter(IndexTimeout);
+
+    try
+    {
+      await process.WaitForExitAsync(timeoutSource.Token);
+    }
+    catch (OperationCanceledException)
+    {
+      TryKill(process);
+      cancellationToken.ThrowIfCancellationRequested();
+      throw new McpException($"'{options.ZvecCommand} index' timed out after {IndexTimeout.TotalMinutes:0} minutes.");
+    }
+
+    var error = (await standardError).Trim();
+    var output = (await standardOutput).Trim();
+    var detail = error.Length > 0 ? error : output;
+    logger.LogDebug("zvec-grep index exited with {ExitCode}: {Detail}", process.ExitCode, detail);
+
+    if (process.ExitCode != 0)
+    {
+      throw new McpException($"'{options.ZvecCommand} index' failed with exit code {process.ExitCode}. {detail}");
     }
   }
 
@@ -79,22 +162,19 @@ public sealed class ZvecSearchBackend(
         return _client;
       }
 
-      var headers = new Dictionary<string, string>();
-      if (!string.IsNullOrWhiteSpace(options.ZvecToken))
-      {
-        headers["Authorization"] = $"Bearer {options.ZvecToken}";
-      }
+      await EnsureIndexedAsync(cancellationToken);
 
-      var transport = new HttpClientTransport(new HttpClientTransportOptions
+      var transport = new StdioClientTransport(new StdioClientTransportOptions
       {
-        Endpoint = new Uri(options.ZvecUrl!),
-        TransportMode = HttpTransportMode.StreamableHttp,
-        ConnectionTimeout = TimeSpan.FromSeconds(2),
-        AdditionalHeaders = headers
+        Name = "zvec-grep",
+        Command = options.ZvecCommand,
+        Arguments = ["server", "--stdio"],
+        WorkingDirectory = resolver.Root,
+        StandardErrorLines = line => logger.LogDebug("zvec-grep: {Line}", line)
       });
 
       using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-      connectTimeout.CancelAfter(TimeSpan.FromSeconds(2));
+      connectTimeout.CancelAfter(ConnectTimeout);
 
       try
       {
@@ -102,16 +182,10 @@ public sealed class ZvecSearchBackend(
       }
       catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
       {
-        await transport.DisposeAsync();
-        throw new McpException($"Timed out connecting to zvec-grep at {options.ZvecUrl}.");
-      }
-      catch
-      {
-        await transport.DisposeAsync();
-        throw;
+        throw new McpException($"Timed out starting '{options.ZvecCommand} server --stdio'.");
       }
 
-      logger.LogInformation("Connected to zvec-grep at {Endpoint}.", options.ZvecUrl);
+      logger.LogInformation("Started zvec-grep from {Command}.", options.ZvecCommand);
       return _client;
     }
     finally

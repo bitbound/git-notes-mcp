@@ -21,19 +21,31 @@ public sealed class NoteSearchServiceTests
   }
 
   [Fact]
-  public async Task Unreachable_zvec_falls_back_to_keyword_search()
+  public async Task Regex_search_stays_on_keyword_when_zvec_is_configured()
   {
     using var vault = new TempVault();
     var (_, store) = await TestServices.CreateAsync(vault, Ct);
     store.Create("a.md", "alpha\n", overwrite: false);
 
-    var options = vault.Options with
-    {
-      ZvecUrl = "http://127.0.0.1:1/mcp",
-      ZvecTimeoutSeconds = 2
-    };
-
+    var options = vault.Options with { ZvecEnabled = true, ZvecCommand = "/nonexistent/zvec-grep" };
     var search = TestServices.Search(options, TestServices.Store(options));
+
+    var result = await search.SearchAsync("al.ha", folder: null, regex: true, caseSensitive: false, contextLines: 0, limit: 10, Ct);
+
+    Assert.Equal("keyword", result.Backend);
+    Assert.Null(result.FallbackReason);
+  }
+
+  [Fact]
+  public async Task Missing_zvec_command_falls_back_to_keyword_search()
+  {
+    using var vault = new TempVault();
+    var (_, store) = await TestServices.CreateAsync(vault, Ct);
+    store.Create("a.md", "alpha\n", overwrite: false);
+
+    var options = vault.Options with { ZvecEnabled = true, ZvecCommand = "/nonexistent/zvec-grep" };
+    var search = TestServices.Search(options, TestServices.Store(options));
+
     var result = await search.SearchAsync("alpha", folder: null, regex: false, caseSensitive: false, contextLines: 0, limit: 10, Ct);
 
     Assert.Equal("keyword", result.Backend);

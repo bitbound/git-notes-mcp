@@ -32,11 +32,9 @@ public sealed record NotesOptions
 
   public long MaxFileBytes { get; init; } = 1024 * 1024;
 
-  public string? ZvecUrl { get; init; }
+  public bool ZvecEnabled { get; init; }
 
-  public string? ZvecToken { get; init; }
-
-  public int ZvecTimeoutSeconds { get; init; } = 10;
+  internal string ZvecCommand { get; init; } = "zg";
 
   public LogLevel LogLevel { get; init; } = LogLevel.Warning;
 
@@ -70,9 +68,7 @@ public sealed record NotesOptions
       AllowRemoteMismatch = GetBool(get, "GIT_NOTES_ALLOW_REMOTE_MISMATCH", false),
       GitTimeoutSeconds = GetInt(get, "GIT_NOTES_GIT_TIMEOUT_SECONDS", 60, 5, 600),
       MaxFileBytes = GetLong(get, "GIT_NOTES_MAX_FILE_BYTES", 1024 * 1024, 1024, 64 * 1024 * 1024),
-      ZvecUrl = GetHttpUrl(get, "GIT_NOTES_ZVEC_URL"),
-      ZvecToken = GetOptional(get, "GIT_NOTES_ZVEC_TOKEN"),
-      ZvecTimeoutSeconds = GetInt(get, "GIT_NOTES_ZVEC_TIMEOUT_SECONDS", 10, 1, 120),
+      ZvecEnabled = GetBool(get, "GIT_NOTES_ZVEC_ENABLED", false),
       LogLevel = GetLogLevel(get, "GIT_NOTES_LOG_LEVEL", LogLevel.Warning)
     };
   }
@@ -98,23 +94,6 @@ public sealed record NotesOptions
   {
     var value = get(name);
     return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
-  }
-
-  private static string? GetHttpUrl(Func<string, string?> get, string name)
-  {
-    var value = GetOptional(get, name);
-    if (value is null)
-    {
-      return null;
-    }
-
-    if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
-      || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-    {
-      throw new NotesConfigurationException($"{name} must be an absolute http or https URL.");
-    }
-
-    return value;
   }
 
   private static bool GetBool(Func<string, string?> get, string name, bool fallback)
