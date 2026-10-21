@@ -7,6 +7,16 @@ namespace Bitbound.GitNotesMcp.Tools;
 [McpServerToolType]
 public sealed class NotesWriteTools(NoteService service)
 {
+  [McpServerTool(Name = "append_note", Destructive = false, OpenWorld = false, Title = "Append to note")]
+  [Description("Append text to a note without reading it first. Creates the note when it does not exist.")]
+  public async Task<string> AppendNote(
+    [Description("Vault-relative path to the note.")]
+    string path,
+    [Description("Text to append. A trailing newline is added when missing.")]
+    string content,
+    CancellationToken cancellationToken = default) =>
+    ToolJson.Serialize(await service.AppendAsync(path, content, cancellationToken));
+
   [McpServerTool(Name = "create_note", OpenWorld = false, Title = "Create note")]
   [Description("Create a markdown note. Fails when the note already exists unless overwrite is true.")]
   public async Task<string> CreateNote(
@@ -18,6 +28,14 @@ public sealed class NotesWriteTools(NoteService service)
     bool overwrite = false,
     CancellationToken cancellationToken = default) =>
     ToolJson.Serialize(await service.CreateAsync(path, content, overwrite, cancellationToken));
+
+  [McpServerTool(Name = "delete_note", Destructive = true, OpenWorld = false, Title = "Delete note")]
+  [Description("Permanently delete a note. Git history is the only way to recover it.")]
+  public async Task<string> DeleteNote(
+    [Description("Vault-relative path to the note.")]
+    string path,
+    CancellationToken cancellationToken = default) =>
+    ToolJson.Serialize(await service.DeleteAsync(path, cancellationToken));
 
   [McpServerTool(Name = "edit_note", OpenWorld = false, Title = "Edit note")]
   [Description("Replace an exact string in a note. By default oldText must occur exactly once.")]
@@ -35,16 +53,6 @@ public sealed class NotesWriteTools(NoteService service)
     CancellationToken cancellationToken = default) =>
     ToolJson.Serialize(await service.EditAsync(path, oldText, newText, replaceAll, expectedHash, cancellationToken));
 
-  [McpServerTool(Name = "append_note", Destructive = false, OpenWorld = false, Title = "Append to note")]
-  [Description("Append text to a note without reading it first. Creates the note when it does not exist.")]
-  public async Task<string> AppendNote(
-    [Description("Vault-relative path to the note.")]
-    string path,
-    [Description("Text to append. A trailing newline is added when missing.")]
-    string content,
-    CancellationToken cancellationToken = default) =>
-    ToolJson.Serialize(await service.AppendAsync(path, content, cancellationToken));
-
   [McpServerTool(Name = "move_note", OpenWorld = false, Title = "Move note")]
   [Description("Move or rename a note. Fails when the destination exists unless overwrite is true.")]
   public async Task<string> MoveNote(
@@ -56,12 +64,4 @@ public sealed class NotesWriteTools(NoteService service)
     bool overwrite = false,
     CancellationToken cancellationToken = default) =>
     ToolJson.Serialize(await service.MoveAsync(from, to, overwrite, cancellationToken));
-
-  [McpServerTool(Name = "delete_note", Destructive = true, OpenWorld = false, Title = "Delete note")]
-  [Description("Permanently delete a note. Git history is the only way to recover it.")]
-  public async Task<string> DeleteNote(
-    [Description("Vault-relative path to the note.")]
-    string path,
-    CancellationToken cancellationToken = default) =>
-    ToolJson.Serialize(await service.DeleteAsync(path, cancellationToken));
 }

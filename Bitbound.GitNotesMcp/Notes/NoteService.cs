@@ -6,12 +6,23 @@ public sealed class NoteService(NoteStore store, GitRepository git)
 {
   private readonly SemaphoreSlim _mutationLock = new(1, 1);
 
+  public Task<MutationResult<NoteWriteResult>> AppendAsync(
+    string path,
+    string content,
+    CancellationToken cancellationToken) =>
+    MutateAsync(() => store.Append(path, content), cancellationToken);
+
   public Task<MutationResult<NoteWriteResult>> CreateAsync(
     string path,
     string content,
     bool overwrite,
     CancellationToken cancellationToken) =>
     MutateAsync(() => store.Create(path, content, overwrite), cancellationToken);
+
+  public Task<MutationResult<NoteDeleteResult>> DeleteAsync(
+    string path,
+    CancellationToken cancellationToken) =>
+    MutateAsync(() => store.Delete(path), cancellationToken);
 
   public Task<MutationResult<NoteEditResult>> EditAsync(
     string path,
@@ -22,23 +33,12 @@ public sealed class NoteService(NoteStore store, GitRepository git)
     CancellationToken cancellationToken) =>
     MutateAsync(() => store.Edit(path, oldText, newText, replaceAll, expectedHash), cancellationToken);
 
-  public Task<MutationResult<NoteWriteResult>> AppendAsync(
-    string path,
-    string content,
-    CancellationToken cancellationToken) =>
-    MutateAsync(() => store.Append(path, content), cancellationToken);
-
   public Task<MutationResult<NoteMoveResult>> MoveAsync(
     string from,
     string to,
     bool overwrite,
     CancellationToken cancellationToken) =>
     MutateAsync(() => store.Move(from, to, overwrite), cancellationToken);
-
-  public Task<MutationResult<NoteDeleteResult>> DeleteAsync(
-    string path,
-    CancellationToken cancellationToken) =>
-    MutateAsync(() => store.Delete(path), cancellationToken);
 
   private async Task<MutationResult<T>> MutateAsync<T>(Func<T> action, CancellationToken cancellationToken)
   {

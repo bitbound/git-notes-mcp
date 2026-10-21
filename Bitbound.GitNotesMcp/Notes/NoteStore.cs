@@ -10,6 +10,78 @@ public sealed class NoteStore(NotesOptions options, NotePathResolver resolver)
 {
   private static readonly Regex HeadingPattern = new(@"^(#{1,6})\s+(.+?)\s*$", RegexOptions.Compiled);
 
+  public NoteWriteResult Append(string path, string content)
+  {
+    var full = resolver.Resolve(path);
+    var existing = File.Exists(full) ? File.ReadAllText(full, Encoding.UTF8) : string.Empty;
+    var updated = existing;
+
+    if (updated.Length > 0 && !updated.EndsWith('\n'))
+    {
+      updated += "\n";
+    }
+
+    updated += content;
+    if (updated.Length > 0 && !updated.EndsWith('\n'))
+    {
+      updated += "\n";
+    }
+
+    WriteAtomic(full, updated);
+    return new NoteWriteResult(Relative(full), ComputeHash(updated), Encoding.UTF8.GetByteCount(updated));
+  }
+
+  public NoteWriteResult Create(string path, string content, bool overwrite)
+  {
+    var full = resolver.Resolve(path);
+    if (File.Exists(full) && !overwrite)
+    {
+      throw new McpException($"Note '{path}' already exists. Pass overwrite=true to replace it.");
+    }
+
+    WriteAtomic(full, content);
+    return new NoteWriteResult(Relative(full), ComputeHash(content), Encoding.UTF8.GetByteCount(content));
+  }
+
+  public NoteDeleteResult Delete(string path)
+  {
+    var full = resolver.Resolve(path, mustExist: true);
+    File.Delete(full);
+    return new NoteDeleteResult(Relative(full));
+  }
+
+  public NoteEditResult Edit(string path, string oldText, string newText, bool replaceAll, string? expectedHash)
+  {
+    if (string.IsNullOrEmpty(oldText))
+    {
+      throw new McpException("oldText is required.");
+    }
+
+    var full = resolver.Resolve(path, mustExist: true);
+    var original = File.ReadAllText(full, Encoding.UTF8);
+
+    if (!string.IsNullOrWhiteSpace(expectedHash)
+      && !string.Equals(expectedHash, ComputeHash(original), StringComparison.OrdinalIgnoreCase))
+    {
+      throw new McpException("The note changed since it was read. Read it again and retry.");
+    }
+
+    var occurrences = CountOccurrences(original, oldText);
+    if (occurrences == 0)
+    {
+      throw new McpException("oldText was not found in the note.");
+    }
+
+    if (occurrences > 1 && !replaceAll)
+    {
+      throw new McpException($"oldText occurs {occurrences} times. Provide a longer unique string or set replaceAll=true.");
+    }
+
+    var updated = original.Replace(oldText, newText, StringComparison.Ordinal);
+    WriteAtomic(full, updated);
+    return new NoteEditResult(Relative(full), occurrences, ComputeHash(updated));
+  }
+
   public IReadOnlyList<NoteSummary> List(string? folder, bool recursive, int limit)
   {
     var start = folder is null ? resolver.Root : resolver.ResolveDirectory(folder);
@@ -24,6 +96,26 @@ public sealed class NoteStore(NotesOptions options, NotePathResolver resolver)
       .OrderBy(summary => summary.Path, StringComparer.Ordinal)
       .Take(max)
       .ToArray();
+  }
+
+  public NoteMoveResult Move(string from, string to, bool overwrite)
+  {
+    var source = resolver.Resolve(from, mustExist: true);
+    var destination = resolver.Resolve(to);
+
+    if (File.Exists(destination) && !overwrite)
+    {
+      throw new McpException($"Note '{to}' already exists. Pass overwrite=true to replace it.");
+    }
+
+    var directory = Path.GetDirectoryName(destination);
+    if (directory is not null)
+    {
+      Directory.CreateDirectory(directory);
+    }
+
+    File.Move(source, destination, overwrite);
+    return new NoteMoveResult(Relative(source), Relative(destination));
   }
 
   public NoteContent Read(string path, string? heading, int? offset, int? limit)
@@ -72,98 +164,6 @@ public sealed class NoteStore(NotesOptions options, NotePathResolver resolver)
       lines.Length,
       hash,
       info.Length);
-  }
-
-  public NoteWriteResult Create(string path, string content, bool overwrite)
-  {
-    var full = resolver.Resolve(path);
-    if (File.Exists(full) && !overwrite)
-    {
-      throw new McpException($"Note '{path}' already exists. Pass overwrite=true to replace it.");
-    }
-
-    WriteAtomic(full, content);
-    return new NoteWriteResult(Relative(full), ComputeHash(content), Encoding.UTF8.GetByteCount(content));
-  }
-
-  public NoteEditResult Edit(string path, string oldText, string newText, bool replaceAll, string? expectedHash)
-  {
-    if (string.IsNullOrEmpty(oldText))
-    {
-      throw new McpException("oldText is required.");
-    }
-
-    var full = resolver.Resolve(path, mustExist: true);
-    var original = File.ReadAllText(full, Encoding.UTF8);
-
-    if (!string.IsNullOrWhiteSpace(expectedHash)
-      && !string.Equals(expectedHash, ComputeHash(original), StringComparison.OrdinalIgnoreCase))
-    {
-      throw new McpException("The note changed since it was read. Read it again and retry.");
-    }
-
-    var occurrences = CountOccurrences(original, oldText);
-    if (occurrences == 0)
-    {
-      throw new McpException("oldText was not found in the note.");
-    }
-
-    if (occurrences > 1 && !replaceAll)
-    {
-      throw new McpException($"oldText occurs {occurrences} times. Provide a longer unique string or set replaceAll=true.");
-    }
-
-    var updated = original.Replace(oldText, newText, StringComparison.Ordinal);
-    WriteAtomic(full, updated);
-    return new NoteEditResult(Relative(full), occurrences, ComputeHash(updated));
-  }
-
-  public NoteWriteResult Append(string path, string content)
-  {
-    var full = resolver.Resolve(path);
-    var existing = File.Exists(full) ? File.ReadAllText(full, Encoding.UTF8) : string.Empty;
-    var updated = existing;
-
-    if (updated.Length > 0 && !updated.EndsWith('\n'))
-    {
-      updated += "\n";
-    }
-
-    updated += content;
-    if (updated.Length > 0 && !updated.EndsWith('\n'))
-    {
-      updated += "\n";
-    }
-
-    WriteAtomic(full, updated);
-    return new NoteWriteResult(Relative(full), ComputeHash(updated), Encoding.UTF8.GetByteCount(updated));
-  }
-
-  public NoteMoveResult Move(string from, string to, bool overwrite)
-  {
-    var source = resolver.Resolve(from, mustExist: true);
-    var destination = resolver.Resolve(to);
-
-    if (File.Exists(destination) && !overwrite)
-    {
-      throw new McpException($"Note '{to}' already exists. Pass overwrite=true to replace it.");
-    }
-
-    var directory = Path.GetDirectoryName(destination);
-    if (directory is not null)
-    {
-      Directory.CreateDirectory(directory);
-    }
-
-    File.Move(source, destination, overwrite);
-    return new NoteMoveResult(Relative(source), Relative(destination));
-  }
-
-  public NoteDeleteResult Delete(string path)
-  {
-    var full = resolver.Resolve(path, mustExist: true);
-    File.Delete(full);
-    return new NoteDeleteResult(Relative(full));
   }
 
   public SearchResponse Search(string query, string? folder, bool regex, bool caseSensitive, int contextLines, int limit)
@@ -248,6 +248,22 @@ public sealed class NoteStore(NotesOptions options, NotePathResolver resolver)
     return new SearchResponse(hits, false);
   }
 
+  private static string ComputeHash(string content) =>
+    Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
+
+  private static int CountOccurrences(string text, string value)
+  {
+    var count = 0;
+    var index = 0;
+    while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+    {
+      count++;
+      index += value.Length;
+    }
+
+    return count;
+  }
+
   private static (int Start, int End) FindSection(string[] lines, string heading)
   {
     var target = NormalizeHeading(heading);
@@ -297,26 +313,31 @@ public sealed class NoteStore(NotesOptions options, NotePathResolver resolver)
   private static string NormalizeHeading(string heading) =>
     string.Join(' ', heading.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Trim();
 
-  private static int CountOccurrences(string text, string value)
+  private static void WriteAtomic(string path, string content)
   {
-    var count = 0;
-    var index = 0;
-    while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+    var directory = Path.GetDirectoryName(path) ?? throw new InvalidOperationException("The note path has no directory.");
+    Directory.CreateDirectory(directory);
+
+    var temp = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+    try
     {
-      count++;
-      index += value.Length;
+      using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+      using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+      {
+        writer.Write(content);
+        writer.Flush();
+        stream.Flush(flushToDisk: true);
+      }
+
+      File.Move(temp, path, overwrite: true);
     }
-
-    return count;
-  }
-
-  private NoteSummary ToSummary(string fullPath)
-  {
-    var info = new FileInfo(fullPath);
-    return new NoteSummary(
-      Path.GetRelativePath(resolver.Root, fullPath).Replace('\\', '/'),
-      info.Length,
-      info.LastWriteTimeUtc);
+    finally
+    {
+      if (File.Exists(temp))
+      {
+        File.Delete(temp);
+      }
+    }
   }
 
   private IEnumerable<string> EnumerateNoteFiles(string start)
@@ -383,33 +404,12 @@ public sealed class NoteStore(NotesOptions options, NotePathResolver resolver)
   private string Relative(string fullPath) =>
     Path.GetRelativePath(resolver.Root, fullPath).Replace('\\', '/');
 
-  private static string ComputeHash(string content) =>
-    Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
-
-  private static void WriteAtomic(string path, string content)
+  private NoteSummary ToSummary(string fullPath)
   {
-    var directory = Path.GetDirectoryName(path) ?? throw new InvalidOperationException("The note path has no directory.");
-    Directory.CreateDirectory(directory);
-
-    var temp = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
-    try
-    {
-      using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-      using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
-      {
-        writer.Write(content);
-        writer.Flush();
-        stream.Flush(flushToDisk: true);
-      }
-
-      File.Move(temp, path, overwrite: true);
-    }
-    finally
-    {
-      if (File.Exists(temp))
-      {
-        File.Delete(temp);
-      }
-    }
+    var info = new FileInfo(fullPath);
+    return new NoteSummary(
+      Path.GetRelativePath(resolver.Root, fullPath).Replace('\\', '/'),
+      info.Length,
+      info.LastWriteTimeUtc);
   }
 }

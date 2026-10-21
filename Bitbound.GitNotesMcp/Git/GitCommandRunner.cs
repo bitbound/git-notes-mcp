@@ -15,6 +15,8 @@ public sealed class GitCommandRunner(Configuration.NotesOptions options)
 {
   private static readonly Regex CredentialPattern = new(@"://[^/@\s]+@", RegexOptions.Compiled);
 
+  public static string Redact(string text) => CredentialPattern.Replace(text, "://***@");
+
   public async Task<GitResult> RunAsync(
     IReadOnlyList<string> arguments,
     bool throwOnFailure = true,
@@ -80,6 +82,9 @@ public sealed class GitCommandRunner(Configuration.NotesOptions options)
     return new GitResult(process.ExitCode, output, error);
   }
 
+  private static string Describe(IReadOnlyList<string> arguments) =>
+    string.Join(' ', arguments.Select(argument => argument.Contains(' ') ? $"\"{argument}\"" : argument));
+
   private static void TryKill(Process process)
   {
     try
@@ -93,9 +98,4 @@ public sealed class GitCommandRunner(Configuration.NotesOptions options)
     {
     }
   }
-
-  private static string Describe(IReadOnlyList<string> arguments) =>
-    string.Join(' ', arguments.Select(argument => argument.Contains(' ') ? $"\"{argument}\"" : argument));
-
-  public static string Redact(string text) => CredentialPattern.Replace(text, "://***@");
 }

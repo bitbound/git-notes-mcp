@@ -13,6 +13,13 @@ internal static class TestServices
   public static NoteStore Store(NotesOptions options) =>
     new(options, new NotePathResolver(options));
 
+  public static NoteSearchService Search(NotesOptions options, NoteStore store)
+  {
+    var resolver = new NotePathResolver(options);
+    var zvec = new ZvecSearchBackend(options, resolver, NullLogger<ZvecSearchBackend>.Instance);
+    return new NoteSearchService(store, resolver, zvec, NullLogger<NoteSearchService>.Instance);
+  }
+
   public static async Task<(GitRepository Git, NoteStore Store)> CreateAsync(
     TempVault vault,
     CancellationToken cancellationToken = default)

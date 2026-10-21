@@ -13,9 +13,9 @@ public sealed record RepositoryStatus(
   int Behind,
   int ChangedLines);
 
-public sealed record PushResult(string Remote, string Branch, int Ahead, int Behind, bool Pushed);
+public sealed record PushResult(string Remote, string Branch, int Ahead, int Behind, bool Pushed, string? CheckpointCommit);
 
-public sealed record TagResult(string Name, string Commit, bool Pushed);
+public sealed record TagResult(string Name, string Commit, bool Pushed, string? CheckpointCommit);
 
 public sealed record CheckpointResult(
   bool Attempted,

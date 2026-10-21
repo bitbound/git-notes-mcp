@@ -130,20 +130,59 @@ public sealed class GitRepositoryTests
   }
 
   [Fact]
-  public async Task Tag_requires_a_clean_tree_and_a_unique_name()
+  public async Task Tag_commits_pending_changes_then_tags()
   {
     using var vault = new TempVault();
     var (git, _) = await TestServices.CreateAsync(vault, Ct);
     File.WriteAllText(Path.Combine(vault.Root, "dirty.md"), "x");
 
+    var tag = await git.CreateTagAsync("dirty", "x", push: false, cancellationToken: Ct);
+
+    Assert.NotNull(tag.CheckpointCommit);
+    Assert.Equal(string.Empty, vault.Run("status", "--porcelain").Output.Trim());
+    Assert.Equal(tag.Commit, vault.Run("rev-parse", "HEAD").Output.Trim());
+
     await Assert.ThrowsAsync<GitCommandException>(() =>
       git.CreateTagAsync("dirty", "x", push: false, cancellationToken: Ct));
+  }
 
-    File.Delete(Path.Combine(vault.Root, "dirty.md"));
+  [Fact]
+  public async Task Push_commits_and_merges_remote_changes()
+  {
+    using var vault = new TempVault();
+    var (git, _) = await TestServices.CreateAsync(vault, Ct);
 
-    var tag = await git.CreateTagAsync("clean", "x", push: false, cancellationToken: Ct);
-    Assert.Equal("clean", tag.Name);
-    await Assert.ThrowsAsync<GitCommandException>(() =>
-      git.CreateTagAsync("clean", "x", push: false, cancellationToken: Ct));
+    File.WriteAllText(Path.Combine(vault.Root, "a.md"), "a\n");
+    Assert.NotNull(await git.CommitAsync("Add a.", Ct));
+    await git.PushAsync(Ct);
+
+    var clone = Path.Combine(Path.GetTempPath(), "git-notes-clone-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+      Assert.Equal(0, TempVault.Git(Path.GetTempPath(), "clone", vault.RemotePath, clone).ExitCode);
+      Assert.Equal(0, TempVault.Git(clone, "config", "user.name", "Other").ExitCode);
+      Assert.Equal(0, TempVault.Git(clone, "config", "user.email", "other@example.com").ExitCode);
+
+      File.WriteAllText(Path.Combine(clone, "b.md"), "b\n");
+      Assert.Equal(0, TempVault.Git(clone, "add", "-A").ExitCode);
+      Assert.Equal(0, TempVault.Git(clone, "commit", "-m", "Add b.").ExitCode);
+      Assert.Equal(0, TempVault.Git(clone, "push", "origin", "main").ExitCode);
+
+      File.WriteAllText(Path.Combine(vault.Root, "local.md"), "local\n");
+      var push = await git.PushAsync(Ct);
+
+      Assert.True(push.Pushed);
+      Assert.NotNull(push.CheckpointCommit);
+      Assert.Equal(string.Empty, vault.Run("status", "--porcelain").Output.Trim());
+      Assert.True(File.Exists(Path.Combine(vault.Root, "b.md")));
+
+      var log = vault.RunRemote("log", "--oneline", "main").Output;
+      Assert.Contains("Add b.", log);
+      Assert.Contains("Checkpoint before push.", log);
+    }
+    finally
+    {
+      Directory.Delete(clone, recursive: true);
+    }
   }
 }

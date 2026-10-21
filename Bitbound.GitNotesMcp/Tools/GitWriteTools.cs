@@ -34,22 +34,8 @@ public sealed class GitWriteTools(NotesOptions options, GitRepository git)
     }
   }
 
-  [McpServerTool(Name = "push_notes", Destructive = false, OpenWorld = true, Title = "Push notes")]
-  [Description("Fetch the remote, rebase when the local branch is behind and the vault is clean, then push the current branch.")]
-  public async Task<string> PushNotes(CancellationToken cancellationToken = default)
-  {
-    try
-    {
-      return ToolJson.Serialize(await git.PushAsync(cancellationToken));
-    }
-    catch (GitCommandException ex)
-    {
-      throw new McpException(ex.Message);
-    }
-  }
-
   [McpServerTool(Name = "create_tag", Destructive = false, OpenWorld = true, Title = "Create tag")]
-  [Description("Create an annotated git tag at the current commit. The vault must be clean. Optionally push the tag.")]
+  [Description("Commit pending changes, then create an annotated tag at the current commit. Optionally push the tag.")]
   public async Task<string> CreateTag(
     [Description("Tag name, for example notes-2026-10-21.")]
     string name,
@@ -66,6 +52,20 @@ public sealed class GitWriteTools(NotesOptions options, GitRepository git)
         string.IsNullOrWhiteSpace(message) ? name : message.Trim(),
         push,
         cancellationToken));
+    }
+    catch (GitCommandException ex)
+    {
+      throw new McpException(ex.Message);
+    }
+  }
+
+  [McpServerTool(Name = "push_notes", Destructive = false, OpenWorld = true, Title = "Push notes")]
+  [Description("Commit pending changes, fetch the remote, merge when behind, then push the current branch.")]
+  public async Task<string> PushNotes(CancellationToken cancellationToken = default)
+  {
+    try
+    {
+      return ToolJson.Serialize(await git.PushAsync(cancellationToken));
     }
     catch (GitCommandException ex)
     {

@@ -10,6 +10,7 @@ public sealed class NotePathResolver
     : StringComparison.Ordinal;
 
   private readonly string _root;
+
   private readonly string _rootWithSeparator;
 
   public NotePathResolver(NotesOptions options)
@@ -28,16 +29,9 @@ public sealed class NotePathResolver
 
   public string Root => _root;
 
-  public string ResolveDirectory(string relativePath)
-  {
-    var full = Resolve(relativePath, mustExist: false, requireMarkdown: false);
-    if (!Directory.Exists(full))
-    {
-      throw new McpException($"Folder '{relativePath}' does not exist.");
-    }
-
-    return full;
-  }
+  public static bool IsMarkdown(string path) =>
+    path.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
+    || path.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase);
 
   public string Resolve(string relativePath, bool mustExist = false, bool requireMarkdown = true)
   {
@@ -106,9 +100,20 @@ public sealed class NotePathResolver
     return combined;
   }
 
-  public static bool IsMarkdown(string path) =>
-    path.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
-    || path.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase);
+  public string ResolveDirectory(string relativePath)
+  {
+    var full = Resolve(relativePath, mustExist: false, requireMarkdown: false);
+    if (!Directory.Exists(full))
+    {
+      throw new McpException($"Folder '{relativePath}' does not exist.");
+    }
+
+    return full;
+  }
+
+  private bool IsUnderRoot(string path) =>
+    path.Equals(_root, PathComparison)
+    || path.StartsWith(_rootWithSeparator, PathComparison);
 
   private string ResolvePhysical(string fullPath)
   {
@@ -136,8 +141,4 @@ public sealed class NotePathResolver
 
     return Path.GetFullPath(current);
   }
-
-  private bool IsUnderRoot(string path) =>
-    path.Equals(_root, PathComparison)
-    || path.StartsWith(_rootWithSeparator, PathComparison);
 }

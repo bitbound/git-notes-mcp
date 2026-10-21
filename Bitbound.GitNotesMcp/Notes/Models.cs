@@ -31,4 +31,10 @@ public sealed record SearchHit(
 
 public sealed record SearchResponse(IReadOnlyList<SearchHit> Matches, bool Truncated);
 
+public sealed record SearchPayload(
+  string Backend,
+  SearchResponse? Matches = null,
+  string? Text = null,
+  string? FallbackReason = null);
+
 public sealed record MutationResult<T>(T Value, CheckpointResult Checkpoint);

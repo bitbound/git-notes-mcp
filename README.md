@@ -22,17 +22,22 @@ The server reads these environment variables at startup.
 | `GIT_NOTES_ALLOW_REMOTE_MISMATCH` | no | `false` | Replace an existing remote that points elsewhere. |
 | `GIT_NOTES_GIT_TIMEOUT_SECONDS` | no | `60` | Timeout for local git commands. Network commands use twice this value. |
 | `GIT_NOTES_MAX_FILE_BYTES` | no | `1048576` | Maximum note size for reads and searches. |
+| `GIT_NOTES_ZVEC_URL` | no | | zvec-grep MCP endpoint. Leave unset for keyword-only search. |
+| `GIT_NOTES_ZVEC_TOKEN` | no | | Bearer token for zvec-grep. |
+| `GIT_NOTES_ZVEC_TIMEOUT_SECONDS` | no | `10` | Timeout for a zvec-grep search. |
 | `GIT_NOTES_LOG_LEVEL` | no | `Warning` | Minimum log level. Logs go to stderr. |
 
 Startup creates the directory and repository when needed, writes `.gitignore` and `.gitattributes`, configures the remote, and makes an initial commit. It never fetches at startup.
 
 The vault must be the root of its own repository. A path inside an existing repository is refused instead of touching the parent repository, and the configured branch must already be checked out.
 
+Push commits pending changes, merges the remote branch when behind, then pushes. Tag creation commits pending changes before tagging.
+
 ## Tools
 
 | Tool | Access | Purpose |
 | --- | --- | --- |
-| `search_notes` | read | Text or regex search with line numbers and context. |
+| `search_notes` | read | Text or regex search. Uses zvec-grep when configured. |
 | `read_note` | read | Read a note, a heading section, or a line range. |
 | `list_notes` | read | List notes with sizes and modified times. |
 | `create_note` | write | Create a note, optionally replacing an existing one. |
@@ -42,10 +47,14 @@ The vault must be the root of its own repository. A path inside an existing repo
 | `delete_note` | destructive | Delete a note. |
 | `git_status` | read | Branch, last commit, dirty files, ahead and behind counts, and changed lines. |
 | `commit_notes` | write | Commit all changes with a message. |
-| `push_notes` | write | Fetch, rebase when clean and behind, then push. |
-| `create_tag` | write | Create an annotated tag, optionally pushing it. |
+| `push_notes` | write | Commit pending changes, fetch, merge when behind, then push. |
+| `create_tag` | write | Commit pending changes, then create an annotated tag. |
 
 Write tools are not registered when `GIT_NOTES_READ_ONLY=true`.
+
+## Semantic search
+
+Set `GIT_NOTES_ZVEC_URL` to a running zvec-grep MCP endpoint, for example `http://127.0.0.1:7999/mcp`, to send natural-language queries to zvec-grep. Regex and case-sensitive searches always use the built-in keyword search. If zvec-grep fails, the call falls back to keyword search and reports the reason in `fallbackReason`.
 
 ## Build and test
 
@@ -79,6 +88,14 @@ MCP client entry:
 
 ## Local publish
 
+Both scripts pack into `NUGET_LOCAL_SOURCE` when set, otherwise `~/.nuget/local-packages`, and bump the patch version from the highest package already there.
+
 ```powershell
 ./publish-local.ps1
 ```
+
+```bash
+./publish-local.sh
+```
+
+The local folder is registered as the `bitbound-local` NuGet source.

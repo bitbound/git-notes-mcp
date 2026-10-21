@@ -31,6 +31,8 @@ builder.Services.AddSingleton<GitRepository>();
 builder.Services.AddSingleton<NotePathResolver>();
 builder.Services.AddSingleton<NoteStore>();
 builder.Services.AddSingleton<NoteService>();
+builder.Services.AddSingleton<ZvecSearchBackend>();
+builder.Services.AddSingleton<NoteSearchService>();
 
 var mcp = builder.Services.AddMcpServer()
   .WithStdioServerTransport()
