@@ -1,0 +1,68 @@
+name: Publish NuGet Package
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Is Prerelease"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  id-token: write
+  actions: read
+  contents: read
+
+env:
+  PKG_VERSION: "0.1.${{ github.run_number }}"
+  TEST_PROJECT: "Tests/Bitbound.GitNotesMcp.Tests/Bitbound.GitNotesMcp.Tests.csproj"
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET SDKs
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: '10.x'
+
+    - name: Build (dev)
+      if: ${{ github.event_name != 'workflow_dispatch' || inputs.prerelease }}
+      run: dotnet build Bitbound.GitNotesMcp.slnx --configuration Release -p:FileVersion="${{ env.PKG_VERSION }}" -p:AssemblyVersion="${{ env.PKG_VERSION }}" -p:VersionPrefix="${{ env.PKG_VERSION }}" -p:VersionSuffix="dev"
+
+    - name: Build (prod)
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease == false }}
+      run: dotnet build Bitbound.GitNotesMcp.slnx --configuration Release -p:FileVersion="${{ env.PKG_VERSION }}" -p:AssemblyVersion="${{ env.PKG_VERSION }}" -p:VersionPrefix="${{ env.PKG_VERSION }}"
+
+    - name: Test
+      run: dotnet run --project "${{ env.TEST_PROJECT }}" --configuration Release --no-build
+
+    - name: Pack (dev)
+      if: ${{ github.event_name != 'workflow_dispatch' || inputs.prerelease }}
+      run: dotnet pack Bitbound.GitNotesMcp.slnx --configuration Release --no-build -p:PackageVersion=${{ env.PKG_VERSION }}-dev
+
+    - name: Pack (prod)
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease == false }}
+      run: dotnet pack Bitbound.GitNotesMcp.slnx --configuration Release --no-build -p:PackageVersion=${{ env.PKG_VERSION }}
+
+    - name: NuGet login (OIDC)
+      if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+
+    - name: Publish
+      if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+      shell: pwsh
+      run: |
+        Get-ChildItem -Path . -Filter *.nupkg -Recurse | ForEach-Object {
+          dotnet nuget push $_.FullName --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        }

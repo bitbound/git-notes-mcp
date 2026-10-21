@@ -1,0 +1,9 @@
+bin/
+obj/
+*.user
+*.vs/
+.vs/
+.DS_Store
+
+# Local pack output
+artifacts/

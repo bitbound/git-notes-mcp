@@ -1,0 +1,24 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <Authors>Jared Goodwin</Authors>
+    <Copyright>©️ $([System.DateTime]::Now.Year) Bitbound</Copyright>
+    <RepositoryUrl>https://github.com/bitbound/Bitbound.GitNotesMcp.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/bitbound/Bitbound.GitNotesMcp</PackageProjectUrl>
+    <Company>Bitbound</Company>
+    <Description>A Model Context Protocol (MCP) server for creating, reading, editing, and searching markdown notes stored in a git repository.</Description>
+    <PackageTags>mcp model-context-protocol notes markdown git ai</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);S125;NU1608;</NoWarn>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);BB0001;</WarningsNotAsErrors>
+  </PropertyGroup>
+</Project>

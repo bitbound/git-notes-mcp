@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/Bitbound.GitNotesMcp.Tests/Bitbound.GitNotesMcp.Tests.csproj" />
+  </Folder>
+  <Project Path="Bitbound.GitNotesMcp/Bitbound.GitNotesMcp.csproj" />
+</Solution>
