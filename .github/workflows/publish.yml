@@ -10,8 +10,7 @@ on:
       prerelease:
         description: "Is Prerelease"
         type: boolean
-        required: true
-        default: true
+        default: false
 
 permissions:
   id-token: write
