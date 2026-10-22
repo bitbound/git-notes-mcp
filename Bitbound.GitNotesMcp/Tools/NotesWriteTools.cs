@@ -10,7 +10,7 @@ public sealed class NotesWriteTools(NoteService service)
   [McpServerTool(Name = "append_note", Destructive = false, OpenWorld = false, Title = "Append to note")]
   [Description("Append text to a note without reading it first. Creates the note when it does not exist.")]
   public async Task<string> AppendNote(
-    [Description("Vault-relative path to the note.")]
+    [Description("Vault-relative path to the note. Parent folders are created when missing.")]
     string path,
     [Description("Text to append. A trailing newline is added when missing.")]
     string content,
@@ -20,7 +20,7 @@ public sealed class NotesWriteTools(NoteService service)
   [McpServerTool(Name = "create_note", OpenWorld = false, Title = "Create note")]
   [Description("Create a markdown note. Fails when the note already exists unless overwrite is true.")]
   public async Task<string> CreateNote(
-    [Description("Vault-relative path for the new note, ending in .md or .markdown.")]
+    [Description("Vault-relative path for the new note, ending in .md or .markdown. Parent folders are created when missing.")]
     string path,
     [Description("Full markdown content of the note.")]
     string content,
@@ -58,7 +58,7 @@ public sealed class NotesWriteTools(NoteService service)
   public async Task<string> MoveNote(
     [Description("Current vault-relative path.")]
     string from,
-    [Description("New vault-relative path.")]
+    [Description("New vault-relative path. Parent folders are created when missing.")]
     string to,
     [Description("Replace an existing note at the destination.")]
     bool overwrite = false,

@@ -32,7 +32,7 @@ public sealed class NotesReadTools(NoteStore store, NoteSearchService search)
     ToolJson.Serialize(store.Read(path, heading, offset, limit));
 
   [McpServerTool(Name = "search_notes", ReadOnly = true, OpenWorld = false, Title = "Search notes")]
-  [Description("Search markdown notes by text or regular expression. Returns vault-relative paths with line numbers, the matching line, and optional context lines. When a zvec-grep endpoint is configured, natural-language queries use it and the result reports backend zvec.")]
+  [Description("Search markdown notes by text or regular expression. Returns vault-relative paths with line numbers, the matching line, and optional context lines. When zvec-grep is enabled, natural-language queries use it and the result reports backend zvec.")]
   public async Task<string> SearchNotes(
     [Description("Text or regular expression to find.")]
     string query,
