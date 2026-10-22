@@ -100,8 +100,30 @@ public sealed class NoteStoreTests
     Assert.Equal(3, result.Matches[0].Line);
     Assert.Equal(1, result.Matches[0].Column);
     Assert.Equal("Alpha beta", result.Matches[0].Match);
-    Assert.Equal("", result.Matches[0].ContextBefore[0]);
-    Assert.Equal("Gamma alpha", result.Matches[0].ContextAfter[0]);
+    Assert.Equal(2, result.Matches[0].ContextBefore[0].Line);
+    Assert.Equal("", result.Matches[0].ContextBefore[0].Text);
+    Assert.Equal(4, result.Matches[0].ContextAfter[0].Line);
+    Assert.Equal("Gamma alpha", result.Matches[0].ContextAfter[0].Text);
+    Assert.Equal(store.Read("search.md", null, null, null).Hash, result.Matches[0].Hash);
+  }
+
+  [Fact]
+  public async Task Search_clamps_context_to_ten_lines_with_sequential_numbers()
+  {
+    using var vault = new TempVault();
+    var (_, store) = await TestServices.CreateAsync(vault, Ct);
+    var body = string.Join('\n', Enumerable.Range(1, 21).Select(n => n == 11 ? "needle" : $"line {n}"));
+    store.Create("deep.md", body + "\n", overwrite: false);
+
+    var hit = Assert.Single(store.Search("needle", folder: null, regex: false, caseSensitive: false, contextLines: 50, limit: 5).Matches);
+
+    Assert.Equal(11, hit.Line);
+    Assert.Equal(10, hit.ContextBefore.Count);
+    Assert.Equal(10, hit.ContextAfter.Count);
+    Assert.Equal(1, hit.ContextBefore[0].Line);
+    Assert.Equal(10, hit.ContextBefore[^1].Line);
+    Assert.Equal(12, hit.ContextAfter[0].Line);
+    Assert.Equal(21, hit.ContextAfter[^1].Line);
   }
 
   [Fact]

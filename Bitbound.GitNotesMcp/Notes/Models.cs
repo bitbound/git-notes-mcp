@@ -26,8 +26,11 @@ public sealed record SearchHit(
   int Line,
   int Column,
   string Match,
-  IReadOnlyList<string> ContextBefore,
-  IReadOnlyList<string> ContextAfter);
+  IReadOnlyList<ContextLine> ContextBefore,
+  IReadOnlyList<ContextLine> ContextAfter,
+  string Hash);
+
+public sealed record ContextLine(int Line, string Text);
 
 public sealed record SearchResponse(IReadOnlyList<SearchHit> Matches, bool Truncated);
 

@@ -48,7 +48,7 @@ public sealed class NotesWriteTools(NoteService service)
     string newText,
     [Description("Replace every occurrence instead of requiring a unique match.")]
     bool replaceAll = false,
-    [Description("Optional hash returned by read_note. When supplied, the edit fails if the note changed since it was read.")]
+    [Description("Optional hash returned by read_note or search_notes. When supplied, the edit fails if the note changed since it was read.")]
     string? expectedHash = null,
     CancellationToken cancellationToken = default) =>
     ToolJson.Serialize(await service.EditAsync(path, oldText, newText, replaceAll, expectedHash, cancellationToken));

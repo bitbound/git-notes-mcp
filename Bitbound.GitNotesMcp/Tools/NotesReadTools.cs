@@ -32,7 +32,7 @@ public sealed class NotesReadTools(NoteStore store, NoteSearchService search)
     ToolJson.Serialize(store.Read(path, heading, offset, limit));
 
   [McpServerTool(Name = "search_notes", ReadOnly = true, OpenWorld = false, Title = "Search notes")]
-  [Description("Search markdown notes by text or regular expression. Returns vault-relative paths with line numbers, the matching line, and optional context lines. When zvec-grep is enabled, natural-language queries use it and the result reports backend zvec.")]
+  [Description("Search markdown notes by text or regular expression. Returns vault-relative paths with line numbers, the matching line, numbered context lines, and a content hash. Pass that hash to edit_note as expectedHash to edit a note from search results without reading it whole. When zvec-grep is enabled, natural-language queries use it and the result reports backend zvec.")]
   public async Task<string> SearchNotes(
     [Description("Text or regular expression to find.")]
     string query,
@@ -42,7 +42,7 @@ public sealed class NotesReadTools(NoteStore store, NoteSearchService search)
     bool regex = false,
     [Description("Match case exactly. Case-sensitive searches always use keyword search.")]
     bool caseSensitive = false,
-    [Description("Lines of context before and after each match, from 0 to 3.")]
+    [Description("Lines of context before and after each match, from 0 to 10.")]
     int contextLines = 1,
     [Description("Maximum number of matches, from 1 to 100.")]
     int limit = 20,

@@ -35,7 +35,7 @@ Push commits pending changes, merges the remote branch when behind, then pushes.
 
 | Tool | Access | Purpose |
 | --- | --- | --- |
-| `search_notes` | read | Text or regex search. Uses zvec-grep when configured. |
+| `search_notes` | read | Text or regex search with line numbers, numbered context lines, and a hash for `edit_note`. Uses zvec-grep when configured. |
 | `read_note` | read | Read a note, a heading section, or a line range. |
 | `list_notes` | read | List notes with sizes and modified times. |
 | `create_note` | write | Create a note, optionally replacing an existing one. |

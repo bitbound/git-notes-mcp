@@ -175,7 +175,7 @@ public sealed class NoteStore(NotesOptions options, NotePathResolver resolver)
 
     var start = folder is null ? resolver.Root : resolver.ResolveDirectory(folder);
     var maxHits = Math.Clamp(limit, 1, 100);
-    var context = Math.Clamp(contextLines, 0, 3);
+    var context = Math.Clamp(contextLines, 0, 10);
 
     var regexOptions = RegexOptions.CultureInvariant
       | (caseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase);
@@ -199,15 +199,21 @@ public sealed class NoteStore(NotesOptions options, NotePathResolver resolver)
         continue;
       }
 
-      string[] lines;
+      string text;
       try
       {
-        lines = File.ReadAllLines(file, Encoding.UTF8);
+        text = File.ReadAllText(file, Encoding.UTF8);
       }
       catch (IOException)
       {
         continue;
       }
+
+      var hash = ComputeHash(text);
+      var lines = text
+        .Split('\n')
+        .Select(line => line.TrimEnd('\r'))
+        .ToArray();
 
       for (var index = 0; index < lines.Length; index++)
       {
@@ -226,17 +232,23 @@ public sealed class NoteStore(NotesOptions options, NotePathResolver resolver)
           continue;
         }
 
-        var beforeStart = Math.Max(0, index - context);
-        var afterStart = index + 1;
-        var afterEnd = Math.Min(lines.Length, afterStart + context);
+        var before = Enumerable
+          .Range(Math.Max(0, index - context), Math.Min(context, index))
+          .Select(i => new ContextLine(i + 1, lines[i]))
+          .ToArray();
+        var after = Enumerable
+          .Range(index + 1, Math.Min(context, lines.Length - index - 1))
+          .Select(i => new ContextLine(i + 1, lines[i]))
+          .ToArray();
 
         hits.Add(new SearchHit(
           Relative(file),
           index + 1,
           match.Index + 1,
           lines[index],
-          lines[beforeStart..index],
-          afterStart < afterEnd ? lines[afterStart..afterEnd] : []));
+          before,
+          after,
+          hash));
 
         if (hits.Count >= maxHits)
         {
