@@ -20,12 +20,17 @@ The server reads these environment variables at startup.
 | `GIT_NOTES_AUTO_COMMIT_THRESHOLD` | no | `100` | Changed lines required before an automatic commit. `0` commits after every mutation. |
 | `GIT_NOTES_AUTO_PUSH` | no | `false` | Push after automatic commits. Implies auto-commit. |
 | `GIT_NOTES_ALLOW_REMOTE_MISMATCH` | no | `false` | Replace an existing remote that points elsewhere. |
+| `GIT_NOTES_SYNC_ON_START` | no | `true` | Fast-forward the working copy from the remote at startup. |
+| `GIT_NOTES_SYNC_BEFORE_READ` | no | `true` | Fast-forward before `list_notes`, `read_note`, and `search_notes`. |
+| `GIT_NOTES_SYNC_MIN_SECONDS` | no | `60` | Minimum seconds between pre-read fetches. `0` fetches before every read. |
 | `GIT_NOTES_GIT_TIMEOUT_SECONDS` | no | `60` | Timeout for local git commands. Network commands use twice this value. |
 | `GIT_NOTES_MAX_FILE_BYTES` | no | `1048576` | Maximum note size for reads and searches. |
 | `GIT_NOTES_ZVEC_ENABLED` | no | `false` | Use `zg` for natural-language search. Requires zvec-grep on PATH. |
 | `GIT_NOTES_LOG_LEVEL` | no | `Warning` | Minimum log level. Logs go to stderr. |
 
-Startup creates the directory and repository when needed, writes `.gitignore` and `.gitattributes`, configures the remote, and makes an initial commit. It never fetches at startup.
+Startup creates the directory and repository when needed, writes `.gitignore` and `.gitattributes`, configures the remote, disables commit and tag signing in the vault, and makes an initial commit. It then fast-forwards the working copy from the remote unless `GIT_NOTES_SYNC_ON_START=false`.
+
+Read tools fast-forward the working copy first so a second machine sees notes pushed from elsewhere. The fetch is rate limited to once per `GIT_NOTES_SYNC_MIN_SECONDS`, fast-forward only, and skipped when offline, when local commits have diverged, or in read-only mode. Sync never creates merge commits and never fails a read.
 
 The vault must be the root of its own repository. A path inside an existing repository is refused instead of touching the parent repository, and the configured branch must already be checked out.
 

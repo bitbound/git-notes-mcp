@@ -47,6 +47,9 @@ public sealed class NotesOptionsTests
     Assert.Equal("origin", options.RemoteName);
     Assert.Equal("Automatic checkpoint.", options.AutoCommitMessage);
     Assert.False(options.ReadOnly);
+    Assert.True(options.SyncOnStart);
+    Assert.True(options.SyncBeforeRead);
+    Assert.Equal(60, options.SyncMinSeconds);
   }
 
   [Fact]

@@ -234,6 +234,10 @@ public sealed class GitRepository(NotesOptions options, GitCommandRunner git, IL
       await GitAsync(["config", "user.email", options.UserEmail], cancellationToken);
     }
 
+    // Signed commits need a usable gpg-agent, which a headless server has no way to provide.
+    await GitAsync(["config", "commit.gpgsign", "false"], cancellationToken);
+    await GitAsync(["config", "tag.gpgsign", "false"], cancellationToken);
+
     await EnsureIdentityAsync(cancellationToken);
     var setupChanged = EnsureSetupFiles();
     await EnsureRemoteAsync(cancellationToken);
@@ -270,6 +274,81 @@ public sealed class GitRepository(NotesOptions options, GitCommandRunner git, IL
     try
     {
       return await PushCoreAsync(cancellationToken);
+    }
+    finally
+    {
+      _writeLock.Release();
+    }
+  }
+
+  /// <summary>
+  /// Fast-forwards the working copy to the remote branch when it is strictly behind.
+  /// Never merges or conflicts. Failures are logged and skipped so reads and startup keep working offline.
+  /// Returns true when the working copy changed.
+  /// </summary>
+  public async Task<bool> SyncAsync(CancellationToken cancellationToken = default)
+  {
+    if (options.ReadOnly)
+    {
+      return false;
+    }
+
+    await _writeLock.WaitAsync(cancellationToken);
+    try
+    {
+      var remote = options.RemoteName;
+      var branch = options.Branch;
+      var timeoutSeconds = options.GitTimeoutSeconds * 2;
+
+      var hasRemote = (await GitAsync(["remote", "get-url", remote], cancellationToken, throwOnFailure: false)).Success;
+      if (!hasRemote)
+      {
+        return false;
+      }
+
+      var fetch = await GitAsync(["fetch", remote], cancellationToken, throwOnFailure: false, timeoutSeconds: timeoutSeconds);
+      if (!fetch.Success)
+      {
+        logger.LogWarning("Could not fetch {Remote}. Continuing with the local copy. {Error}", remote, GitCommandRunner.Redact(fetch.StandardError).Trim());
+        return false;
+      }
+
+      var remoteRef = await GitAsync(["rev-parse", "--verify", $"refs/remotes/{remote}/{branch}"], cancellationToken, throwOnFailure: false);
+      if (!remoteRef.Success)
+      {
+        return false;
+      }
+
+      var counts = await GitAsync(
+        ["rev-list", "--left-right", "--count", $"HEAD...{remote}/{branch}"],
+        cancellationToken,
+        throwOnFailure: false);
+      if (!counts.Success)
+      {
+        return false;
+      }
+
+      var parts = counts.StandardOutput.Split(new[] { '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+      if (parts.Length < 2 || !int.TryParse(parts[1], out var behind) || behind == 0)
+      {
+        return false;
+      }
+
+      var merge = await GitAsync(
+        ["merge", "--ff-only", "--no-edit", $"{remote}/{branch}"],
+        cancellationToken,
+        throwOnFailure: false,
+        timeoutSeconds: timeoutSeconds);
+
+      if (!merge.Success)
+      {
+        await GitAsync(["merge", "--abort"], cancellationToken, throwOnFailure: false);
+        logger.LogWarning("Could not fast-forward to {Remote}/{Branch}. Continuing with the local copy.", remote, branch);
+        return false;
+      }
+
+      logger.LogInformation("Fast-forwarded {Count} commit(s) from {Remote}/{Branch}.", behind, remote, branch);
+      return true;
     }
     finally
     {
@@ -611,7 +690,11 @@ public sealed class GitRepository(NotesOptions options, GitCommandRunner git, IL
 
       if (behind > 0)
       {
-        var merge = await GitAsync(["merge", "--no-edit", $"{remote}/{branch}"], cancellationToken, throwOnFailure: false, timeoutSeconds: timeoutSeconds);
+        var merge = await GitAsync(
+          ["-c", "commit.gpgsign=false", "merge", "--no-edit", $"{remote}/{branch}"],
+          cancellationToken,
+          throwOnFailure: false,
+          timeoutSeconds: timeoutSeconds);
         if (!merge.Success)
         {
           await GitAsync(["merge", "--abort"], cancellationToken, throwOnFailure: false);

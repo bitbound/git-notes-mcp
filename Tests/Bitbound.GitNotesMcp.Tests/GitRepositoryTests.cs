@@ -28,6 +28,95 @@ public sealed class GitRepositoryTests
   }
 
   [Fact]
+  public async Task Initialize_disables_signing_in_the_vault()
+  {
+    using var vault = new TempVault();
+    await TestServices.Git(vault.Options).InitializeAsync(Ct);
+
+    Assert.Equal("false", vault.Run("config", "commit.gpgsign").Output.Trim());
+    Assert.Equal("false", vault.Run("config", "tag.gpgsign").Output.Trim());
+  }
+
+  [Fact]
+  public async Task Sync_fast_forwards_remote_commits()
+  {
+    using var vault = new TempVault();
+    var (git, _) = await TestServices.CreateAsync(vault, Ct);
+
+    File.WriteAllText(Path.Combine(vault.Root, "a.md"), "a\n");
+    Assert.NotNull(await git.CommitAsync("Add a.", Ct));
+    await git.PushAsync(Ct);
+
+    var clone = CloneWithIdentity(vault);
+    try
+    {
+      File.WriteAllText(Path.Combine(clone, "b.md"), "b\n");
+      Assert.Equal(0, TempVault.Git(clone, "add", "-A").ExitCode);
+      Assert.Equal(0, TempVault.Git(clone, "commit", "-m", "Add b.").ExitCode);
+      Assert.Equal(0, TempVault.Git(clone, "push", "origin", "main").ExitCode);
+
+      Assert.True(await git.SyncAsync(Ct));
+      Assert.True(File.Exists(Path.Combine(vault.Root, "b.md")));
+
+      Assert.False(await git.SyncAsync(Ct));
+    }
+    finally
+    {
+      TempVault.DeleteTree(clone);
+    }
+  }
+
+  [Fact]
+  public async Task Sync_leaves_a_diverged_vault_untouched()
+  {
+    using var vault = new TempVault();
+    var (git, _) = await TestServices.CreateAsync(vault, Ct);
+
+    File.WriteAllText(Path.Combine(vault.Root, "a.md"), "a\n");
+    Assert.NotNull(await git.CommitAsync("Add a.", Ct));
+    await git.PushAsync(Ct);
+
+    var clone = CloneWithIdentity(vault);
+    try
+    {
+      File.WriteAllText(Path.Combine(clone, "b.md"), "b\n");
+      Assert.Equal(0, TempVault.Git(clone, "add", "-A").ExitCode);
+      Assert.Equal(0, TempVault.Git(clone, "commit", "-m", "Add b.").ExitCode);
+      Assert.Equal(0, TempVault.Git(clone, "push", "origin", "main").ExitCode);
+
+      File.WriteAllText(Path.Combine(vault.Root, "local.md"), "local\n");
+      Assert.NotNull(await git.CommitAsync("Add local.", Ct));
+
+      Assert.False(await git.SyncAsync(Ct));
+      Assert.False(File.Exists(Path.Combine(vault.Root, "b.md")));
+    }
+    finally
+    {
+      TempVault.DeleteTree(clone);
+    }
+  }
+
+  [Fact]
+  public async Task Sync_survives_an_unreachable_remote()
+  {
+    using var vault = new TempVault();
+    await TestServices.Git(vault.Options).InitializeAsync(Ct);
+
+    var offline = vault.Options with { RemoteUrl = Path.Combine(Path.GetTempPath(), "missing-remote-" + Guid.NewGuid().ToString("N")) };
+
+    Assert.False(await TestServices.Git(offline).SyncAsync(Ct));
+  }
+
+  private static string CloneWithIdentity(TempVault vault)
+  {
+    var clone = Path.Combine(Path.GetTempPath(), "git-notes-clone-" + Guid.NewGuid().ToString("N"));
+    Assert.Equal(0, TempVault.Git(Path.GetTempPath(), "clone", vault.RemotePath, clone).ExitCode);
+    Assert.Equal(0, TempVault.Git(clone, "config", "user.name", "Other").ExitCode);
+    Assert.Equal(0, TempVault.Git(clone, "config", "user.email", "other@example.com").ExitCode);
+    return clone;
+  }
+
+  [Fact]
   public async Task Initialize_rejects_a_different_remote()
   {
     using var vault = new TempVault();

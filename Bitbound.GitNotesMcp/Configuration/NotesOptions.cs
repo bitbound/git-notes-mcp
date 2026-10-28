@@ -28,6 +28,12 @@ public sealed record NotesOptions
 
   public bool AllowRemoteMismatch { get; init; }
 
+  public bool SyncOnStart { get; init; } = true;
+
+  public bool SyncBeforeRead { get; init; } = true;
+
+  public int SyncMinSeconds { get; init; } = 60;
+
   public int GitTimeoutSeconds { get; init; } = 60;
 
   public long MaxFileBytes { get; init; } = 1024 * 1024;
@@ -66,6 +72,9 @@ public sealed record NotesOptions
       AutoCommitThreshold = GetInt(get, "GIT_NOTES_AUTO_COMMIT_THRESHOLD", 100, 0, 100_000),
       AutoPush = autoPush,
       AllowRemoteMismatch = GetBool(get, "GIT_NOTES_ALLOW_REMOTE_MISMATCH", false),
+      SyncOnStart = GetBool(get, "GIT_NOTES_SYNC_ON_START", true),
+      SyncBeforeRead = GetBool(get, "GIT_NOTES_SYNC_BEFORE_READ", true),
+      SyncMinSeconds = GetInt(get, "GIT_NOTES_SYNC_MIN_SECONDS", 60, 0, 3600),
       GitTimeoutSeconds = GetInt(get, "GIT_NOTES_GIT_TIMEOUT_SECONDS", 60, 5, 600),
       MaxFileBytes = GetLong(get, "GIT_NOTES_MAX_FILE_BYTES", 1024 * 1024, 1024, 64 * 1024 * 1024),
       ZvecEnabled = GetBool(get, "GIT_NOTES_ZVEC_ENABLED", false),

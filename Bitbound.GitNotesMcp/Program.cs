@@ -28,6 +28,7 @@ builder.Logging.SetMinimumLevel(options.LogLevel);
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton<GitCommandRunner>();
 builder.Services.AddSingleton<GitRepository>();
+builder.Services.AddSingleton<VaultSyncService>();
 builder.Services.AddSingleton<NotePathResolver>();
 builder.Services.AddSingleton<NoteStore>();
 builder.Services.AddSingleton<NoteService>();
@@ -46,9 +47,14 @@ if (!options.ReadOnly)
 }
 
 var host = builder.Build();
+var git = host.Services.GetRequiredService<GitRepository>();
 try
 {
-  await host.Services.GetRequiredService<GitRepository>().InitializeAsync();
+  await git.InitializeAsync();
+  if (options.SyncOnStart)
+  {
+    await git.SyncAsync();
+  }
 }
 catch (Exception ex)
 {
