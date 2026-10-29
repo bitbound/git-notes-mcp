@@ -99,6 +99,7 @@ public sealed class ZvecSearchBackend(
     var startInfo = new ProcessStartInfo(options.ZvecCommand)
     {
       WorkingDirectory = resolver.Root,
+      RedirectStandardInput = true,
       RedirectStandardOutput = true,
       RedirectStandardError = true,
       UseShellExecute = false,
@@ -113,6 +114,8 @@ public sealed class ZvecSearchBackend(
     try
     {
       process.Start();
+      // Close stdin so a child can never block reading this server's inherited stdio pipe.
+      process.StandardInput.Close();
     }
     catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
     {
